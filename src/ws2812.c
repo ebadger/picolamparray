@@ -75,7 +75,7 @@ const struct {
         {pattern_greys,   "Greys"},
 };
 
-int main() {
+int led_init() {
     //set_sys_clock_48();
     stdio_init_all();
     printf("WS2812 Smoke Test, using pin %d", WS2812_PIN);
@@ -86,10 +86,11 @@ int main() {
     uint offset = pio_add_program(pio, &ws2812_program);
 
     ws2812_program_init(pio, sm, offset, WS2812_PIN, 800000, IS_RGBW);
+}
 
-    int t = 0;
-    while (1) {
-        int pat = rand() % count_of(pattern_table);
+int led_loop() {
+    static int t = 0;
+       int pat = rand() % count_of(pattern_table);
         int dir = (rand() >> 30) & 1 ? 1 : -1;
         puts(pattern_table[pat].name);
         puts(dir == 1 ? "(forward)" : "(backward)");
@@ -98,5 +99,5 @@ int main() {
             sleep_ms(10);
             t += dir;
         }
-    }
 }
+

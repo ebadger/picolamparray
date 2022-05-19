@@ -222,9 +222,9 @@ set(CMAKE_MAKEFILE_PRODUCTS
 
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
-  "CMakeFiles/pio_ws2812.dir/DependInfo.cmake"
+  "CMakeFiles/pico_lamp_array.dir/DependInfo.cmake"
   "CMakeFiles/PioasmBuild.dir/DependInfo.cmake"
-  "CMakeFiles/pio_ws2812_ws2812_pio_h.dir/DependInfo.cmake"
+  "CMakeFiles/pico_lamp_array_ws2812_pio_h.dir/DependInfo.cmake"
   "CMakeFiles/ELF2UF2Build.dir/DependInfo.cmake"
   "pico-sdk/src/rp2_common/boot_stage2/CMakeFiles/bs2_default.dir/DependInfo.cmake"
   "pico-sdk/src/rp2_common/boot_stage2/CMakeFiles/bs2_default_bin.dir/DependInfo.cmake"

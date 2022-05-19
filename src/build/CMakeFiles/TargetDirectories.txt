@@ -1,6 +1,6 @@
-C:/msys64/home/ebadger/picolamparray/src/build/CMakeFiles/pio_ws2812.dir
+C:/msys64/home/ebadger/picolamparray/src/build/CMakeFiles/pico_lamp_array.dir
 C:/msys64/home/ebadger/picolamparray/src/build/CMakeFiles/PioasmBuild.dir
-C:/msys64/home/ebadger/picolamparray/src/build/CMakeFiles/pio_ws2812_ws2812_pio_h.dir
+C:/msys64/home/ebadger/picolamparray/src/build/CMakeFiles/pico_lamp_array_ws2812_pio_h.dir
 C:/msys64/home/ebadger/picolamparray/src/build/CMakeFiles/ELF2UF2Build.dir
 C:/msys64/home/ebadger/picolamparray/src/build/CMakeFiles/edit_cache.dir
 C:/msys64/home/ebadger/picolamparray/src/build/CMakeFiles/rebuild_cache.dir
