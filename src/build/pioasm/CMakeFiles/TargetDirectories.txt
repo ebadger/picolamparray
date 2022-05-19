@@ -1,0 +1,3 @@
+C:/msys64/home/ebadger/picolamparray/src/build/pioasm/CMakeFiles/pioasm.dir
+C:/msys64/home/ebadger/picolamparray/src/build/pioasm/CMakeFiles/edit_cache.dir
+C:/msys64/home/ebadger/picolamparray/src/build/pioasm/CMakeFiles/rebuild_cache.dir
