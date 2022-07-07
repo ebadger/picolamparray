@@ -32,7 +32,7 @@
 #include "tusb.h"
 
 #include "usb_descriptors.h"
-
+#include "lamparrayhiddescriptor.h"
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF PROTYPES
@@ -55,28 +55,41 @@ void led_blinking_task(void);
 void hid_task(void);
 int led_init(void);
 int led_loop(void);
+void put_pixel2(uint8_t r, uint8_t g, uint8_t b, uint8_t i);
+void put_pixel(uint8_t r, uint8_t g, uint8_t b);
 
-
-int core1(void)
+void core1(void)
 {
-
- led_init();
+  led_init();
 
   while (1)
   {
-    led_loop();
+    //led_loop();
+    for (int i = 0; i < LAMP_COUNT; i++)
+    {
+        put_pixel(
+            _cachedStateReadFrom.Colors[i].RedChannel, 
+            _cachedStateReadFrom.Colors[i].GreenChannel, 
+            _cachedStateReadFrom.Colors[i].BlueChannel);
+    }
+    sleep_ms(5);
   }
-
-  return 0;
 }
 
 /*------------- MAIN -------------*/
 int main(void)
 {
+
+//  stdio_init_all();
+//  setup_default_uart();
+
   board_init();
   tusb_init();
 
   multicore_launch_core1(core1);
+
+  memset(&_cachedStateWriteTo, 0, sizeof(_cachedStateWriteTo));
+  memset(&_cachedStateReadFrom, 0, sizeof(_cachedStateReadFrom));
 
   while (1)
   {
@@ -84,6 +97,25 @@ int main(void)
     led_blinking_task();
 
     hid_task();
+
+#if 0
+    for (int i = 0; i < LAMP_COUNT; i++)
+    {
+        // Ignore the gain channel, only care about RGB.
+        if (_cachedStateDisplaying.Colors[i].RedChannel != _cachedStateReadFrom.Colors[i].RedChannel || 
+            _cachedStateDisplaying.Colors[i].GreenChannel != _cachedStateReadFrom.Colors[i].GreenChannel || 
+            _cachedStateDisplaying.Colors[i].BlueChannel != _cachedStateReadFrom.Colors[i].BlueChannel)
+        {
+            // Update the current color (cache and set pixel state)
+            memcpy(&(_cachedStateDisplaying.Colors[i]), &(_cachedStateReadFrom.Colors[i]), sizeof(LampArrayColor));
+            put_pixel2( i, 
+                _cachedStateDisplaying.Colors[i].RedChannel, 
+                _cachedStateDisplaying.Colors[i].GreenChannel, 
+                _cachedStateDisplaying.Colors[i].BlueChannel);
+        }
+    }
+#endif
+
   }
 
   return 0;
@@ -143,7 +175,8 @@ static void send_hid_report(uint8_t report_id, uint32_t btn)
 
         tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
         has_keyboard_key = true;
-      }else
+      }
+      else
       {
         // send empty key report if previously has key pressed
         if (has_keyboard_key) tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
@@ -233,10 +266,11 @@ void hid_task(void)
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host
     tud_remote_wakeup();
-  }else
+  }
+  else
   {
     // Send the 1st of report chain, the rest will be sent by tud_hid_report_complete_cb()
-    send_hid_report(REPORT_ID_KEYBOARD, btn);
+    //send_hid_report(REPORT_ID_KEYBOARD, btn);
   }
 }
 
@@ -253,52 +287,6 @@ void tud_hid_report_complete_cb(uint8_t instance, uint8_t const* report, uint8_t
   if (next_report_id < REPORT_ID_COUNT)
   {
     send_hid_report(next_report_id, board_button_read());
-  }
-}
-
-// Invoked when received GET_REPORT control request
-// Application must fill buffer report's content and return its length.
-// Return zero will cause the stack to STALL request
-uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
-{
-  // TODO not Implemented
-  (void) instance;
-  (void) report_id;
-  (void) report_type;
-  (void) buffer;
-  (void) reqlen;
-
-  return 0;
-}
-
-// Invoked when received SET_REPORT control request or
-// received data on OUT endpoint ( Report ID = 0, Type = 0 )
-void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
-{
-  (void) instance;
-
-  if (report_type == HID_REPORT_TYPE_OUTPUT)
-  {
-    // Set keyboard LED e.g Capslock, Numlock etc...
-    if (report_id == REPORT_ID_KEYBOARD)
-    {
-      // bufsize should be (at least) 1
-      if ( bufsize < 1 ) return;
-
-      uint8_t const kbd_leds = buffer[0];
-
-      if (kbd_leds & KEYBOARD_LED_CAPSLOCK)
-      {
-        // Capslock On: disable blink, turn led on
-        blink_interval_ms = 0;
-        board_led_write(true);
-      }else
-      {
-        // Caplocks Off: back to normal blink
-        board_led_write(false);
-        blink_interval_ms = BLINK_MOUNTED;
-      }
-    }
   }
 }
 

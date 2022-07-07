@@ -12,19 +12,34 @@
 #include "hardware/clocks.h"
 #include "ws2812.pio.h"
 
-#define IS_RGBW true
+#define IS_RGBW false
 #define NUM_PIXELS 256
 #define WS2812_PIN 16
 
-static inline void put_pixel(uint32_t pixel_grb) {
+void put_pixel(uint32_t pixel_grb) {
     pio_sm_put_blocking(pio0, 0, pixel_grb << 8u);
 }
+
 
 static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
     return
             ((uint32_t) (r) << 8) |
             ((uint32_t) (g) << 16) |
             (uint32_t) (b);
+}
+
+static inline uint32_t urgbI_u32(uint8_t r, uint8_t g, uint8_t b, uint8_t i) {
+    return
+            ((uint32_t) (i) << 24) |
+            ((uint32_t) (r) << 8) |
+            ((uint32_t) (g) << 16) |
+            (uint32_t) (b);
+}
+
+
+void put_pixel2(uint8_t r, uint8_t g, uint8_t b, uint8_t i)
+{
+    put_pixel(urgbI_u32(r,g,b,i));
 }
 
 void pattern_snakes(uint len, uint t) {

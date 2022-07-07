@@ -25,6 +25,9 @@
 #ifndef USB_DESCRIPTORS_H_
 #define USB_DESCRIPTORS_H_
 
+#include "LampArrayHidDescriptor.h"
+#include "LampArrayReports.h"
+#include "LampArrayAttributes.h"
 enum
 {
   REPORT_ID_KEYBOARD = 1,
@@ -33,5 +36,8 @@ enum
   REPORT_ID_GAMEPAD,
   REPORT_ID_COUNT
 };
+
+
+
 
 #endif /* USB_DESCRIPTORS_H_ */

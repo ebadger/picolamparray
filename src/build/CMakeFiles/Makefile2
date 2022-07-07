@@ -1325,9 +1325,9 @@ pico-sdk/tools/clean:
 # Target rules for target CMakeFiles/pico_lamp_array.dir
 
 # All Build rule for target.
+CMakeFiles/pico_lamp_array.dir/all: pico-sdk/src/rp2_common/boot_stage2/CMakeFiles/bs2_default_padded_checksummed_asm.dir/all
 CMakeFiles/pico_lamp_array.dir/all: CMakeFiles/pico_lamp_array_ws2812_pio_h.dir/all
 CMakeFiles/pico_lamp_array.dir/all: CMakeFiles/ELF2UF2Build.dir/all
-CMakeFiles/pico_lamp_array.dir/all: pico-sdk/src/rp2_common/boot_stage2/CMakeFiles/bs2_default_padded_checksummed_asm.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\pico_lamp_array.dir\build.make CMakeFiles/pico_lamp_array.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\pico_lamp_array.dir\build.make CMakeFiles/pico_lamp_array.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=C:\msys64\home\ebadger\picolamparray\src\build\CMakeFiles --progress-num=22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92 "Built target pico_lamp_array"
