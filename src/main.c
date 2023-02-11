@@ -57,7 +57,7 @@ enum  {
 };
 
 
-#define ARRAY_COLUMNS 144
+#define ARRAY_COLUMNS 48
 #define ARRAY_ROWS 1
 
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
