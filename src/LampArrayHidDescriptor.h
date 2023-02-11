@@ -5,7 +5,7 @@
 #pragma once
 
 // Update _pack_buffer if this gets larger than 1KB
-static const uint8_t s_hidReportDescriptor[]  = {
+static const uint8_t _hidReportDescriptor[]  = {
 #ifdef USE_HID_VALIDATOR_TOOL
     0x06, 0x59, 0xFF,              // USAGE_PAGE (LightingAndIllumination)   
 #else

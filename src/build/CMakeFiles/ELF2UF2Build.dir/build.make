@@ -87,7 +87,7 @@ elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-build: elf2uf2/src/ELF2UF2Build-stam
 elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-configure: elf2uf2/tmp/ELF2UF2Build-cfgcmd.txt
 elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-configure: elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-patch
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=C:\msys64\home\ebadger\picolamparray\src\build\CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Performing configure step for 'ELF2UF2Build'"
-	cd /d C:\msys64\home\ebadger\picolamparray\src\build\elf2uf2 && "C:\Program Files\CMake\bin\cmake.exe" "-GMinGW Makefiles" C:/msys64/home/ebadger/pico-sdk/tools/elf2uf2
+	cd /d C:\msys64\home\ebadger\picolamparray\src\build\elf2uf2 && "C:\Program Files\CMake\bin\cmake.exe" -DCMAKE_MAKE_PROGRAM:FILEPATH=C:/msys64/mingw64/bin/mingw32-make.exe "-GMinGW Makefiles" C:/msys64/home/ebadger/pico-sdk/tools/elf2uf2
 	cd /d C:\msys64\home\ebadger\picolamparray\src\build\elf2uf2 && "C:\Program Files\CMake\bin\cmake.exe" -E touch C:/msys64/home/ebadger/picolamparray/src/build/elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-configure
 
 elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-download: elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-source_dirinfo.txt

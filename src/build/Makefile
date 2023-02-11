@@ -129,19 +129,6 @@ pico_lamp_array/fast:
 .PHONY : pico_lamp_array/fast
 
 #=============================================================================
-# Target rules for targets named PioasmBuild
-
-# Build rule for target.
-PioasmBuild: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 PioasmBuild
-.PHONY : PioasmBuild
-
-# fast build rule for target.
-PioasmBuild/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\PioasmBuild.dir\build.make CMakeFiles/PioasmBuild.dir/build
-.PHONY : PioasmBuild/fast
-
-#=============================================================================
 # Target rules for targets named pico_lamp_array_ws2812_pio_h
 
 # Build rule for target.
@@ -205,6 +192,45 @@ bs2_default_padded_checksummed_asm: cmake_check_build_system
 bs2_default_padded_checksummed_asm/fast:
 	$(MAKE) $(MAKESILENT) -f pico-sdk\src\rp2_common\boot_stage2\CMakeFiles\bs2_default_padded_checksummed_asm.dir\build.make pico-sdk/src/rp2_common/boot_stage2/CMakeFiles/bs2_default_padded_checksummed_asm.dir/build
 .PHONY : bs2_default_padded_checksummed_asm/fast
+
+#=============================================================================
+# Target rules for targets named cyw43_firmware_package
+
+# Build rule for target.
+cyw43_firmware_package: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 cyw43_firmware_package
+.PHONY : cyw43_firmware_package
+
+# fast build rule for target.
+cyw43_firmware_package/fast:
+	$(MAKE) $(MAKESILENT) -f pico-sdk\src\rp2_common\cyw43_driver\CMakeFiles\cyw43_firmware_package.dir\build.make pico-sdk/src/rp2_common/cyw43_driver/CMakeFiles/cyw43_firmware_package.dir/build
+.PHONY : cyw43_firmware_package/fast
+
+#=============================================================================
+# Target rules for targets named PioasmBuild
+
+# Build rule for target.
+PioasmBuild: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 PioasmBuild
+.PHONY : PioasmBuild
+
+# fast build rule for target.
+PioasmBuild/fast:
+	$(MAKE) $(MAKESILENT) -f pico-sdk\src\rp2_common\cyw43_driver\CMakeFiles\PioasmBuild.dir\build.make pico-sdk/src/rp2_common/cyw43_driver/CMakeFiles/PioasmBuild.dir/build
+.PHONY : PioasmBuild/fast
+
+#=============================================================================
+# Target rules for targets named cyw43_driver_picow_cyw43_bus_pio_spi_pio_h
+
+# Build rule for target.
+cyw43_driver_picow_cyw43_bus_pio_spi_pio_h: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 cyw43_driver_picow_cyw43_bus_pio_spi_pio_h
+.PHONY : cyw43_driver_picow_cyw43_bus_pio_spi_pio_h
+
+# fast build rule for target.
+cyw43_driver_picow_cyw43_bus_pio_spi_pio_h/fast:
+	$(MAKE) $(MAKESILENT) -f pico-sdk\src\rp2_common\cyw43_driver\CMakeFiles\cyw43_driver_picow_cyw43_bus_pio_spi_pio_h.dir\build.make pico-sdk/src/rp2_common/cyw43_driver/CMakeFiles/cyw43_driver_picow_cyw43_bus_pio_spi_pio_h.dir/build
+.PHONY : cyw43_driver_picow_cyw43_bus_pio_spi_pio_h/fast
 
 C_/msys64/home/ebadger/pico-sdk/lib/tinyusb/hw/bsp/rp2040/family.obj: C_/msys64/home/ebadger/pico-sdk/lib/tinyusb/hw/bsp/rp2040/family.c.obj
 .PHONY : C_/msys64/home/ebadger/pico-sdk/lib/tinyusb/hw/bsp/rp2040/family.obj
@@ -1722,6 +1748,8 @@ help:
 	@echo ... PioasmBuild
 	@echo ... bs2_default_bin
 	@echo ... bs2_default_padded_checksummed_asm
+	@echo ... cyw43_driver_picow_cyw43_bus_pio_spi_pio_h
+	@echo ... cyw43_firmware_package
 	@echo ... pico_lamp_array_ws2812_pio_h
 	@echo ... bs2_default
 	@echo ... pico_lamp_array

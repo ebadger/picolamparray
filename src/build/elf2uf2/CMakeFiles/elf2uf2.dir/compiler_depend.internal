@@ -60,6 +60,9 @@ CMakeFiles/elf2uf2.dir/main.cpp.obj
  C:/msys64/mingw64/include/c++/11.2.0/bits/invoke.h
  C:/msys64/mingw64/include/c++/11.2.0/bits/stl_multimap.h
  C:/msys64/mingw64/include/c++/11.2.0/bits/erase_if.h
+ C:/msys64/mingw64/include/c++/11.2.0/set
+ C:/msys64/mingw64/include/c++/11.2.0/bits/stl_set.h
+ C:/msys64/mingw64/include/c++/11.2.0/bits/stl_multiset.h
  C:/msys64/mingw64/include/c++/11.2.0/vector
  C:/msys64/mingw64/include/c++/11.2.0/bits/stl_uninitialized.h
  C:/msys64/mingw64/include/c++/11.2.0/bits/stl_vector.h

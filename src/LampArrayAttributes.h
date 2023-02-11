@@ -1,20 +1,14 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 
 #pragma once
-
-#define LAMP_COUNT  256
+#include <stdlib.h>
 
 typedef struct __attribute__ ((__packed__)) LampArrayState_
 {
-    LampArrayColor Colors[LAMP_COUNT];
+    LampArrayColor *Colors;
 } LampArrayState;
 
-extern LampArrayState _cachedStateWriteTo;
-extern LampArrayState _cachedStateReadFrom;
-
-extern uint16_t _lastLampIdRequested;
-extern bool _autonomousMode;
-    
+#if 0
 static const LampAttributesResponseReport s_lampAttributesReports[]  = 
 {
     // All lengths in micrometers.
@@ -284,6 +278,8 @@ static const LampArrayAttributesReport s_lampArrayAttributesReport  =
 {
     // All lengths in micrometers.
     // All times in microseconds.
-    //                               Count Width        Height   Depth     KIND  MinUpdateInternal
-                                      0x100, 0x4baf0, 0x11170, 0x01 * 1000, 0x01, 33 * 1000
+    // Count     Width    Height  Depth  KIND  MinUpdateInternal
+    LAMP_COUNT, 0x4baf0, 0x11170, 0x1, 0x01, 33 * 1000
 };
+
+#endif

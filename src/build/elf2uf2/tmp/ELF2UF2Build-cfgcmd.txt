@@ -1,1 +1,1 @@
-cmd='C:/Program Files/CMake/bin/cmake.exe;-GMinGW Makefiles;<SOURCE_DIR><SOURCE_SUBDIR>'
+cmd='C:/Program Files/CMake/bin/cmake.exe;-DCMAKE_MAKE_PROGRAM:FILEPATH=C:/msys64/mingw64/bin/mingw32-make.exe;-GMinGW Makefiles;<SOURCE_DIR><SOURCE_SUBDIR>'

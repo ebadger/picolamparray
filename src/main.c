@@ -27,12 +27,19 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico/multicore.h"
+#include "pico/stdlib.h"
 
 #include "bsp/board.h"
 #include "tusb.h"
 
 #include "usb_descriptors.h"
 #include "lamparrayhiddescriptor.h"
+
+LampArrayColor *_cachedStateWriteTo = NULL;
+LampArrayColor *_cachedStateReadFrom = NULL;
+LampAttributesResponseReport *_lampAttributesReports = NULL;
+LampArrayAttributesReport _lampArrayAttributesReport = {};
+
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF PROTYPES
@@ -49,14 +56,95 @@ enum  {
   BLINK_SUSPENDED = 2500,
 };
 
+
+#define ARRAY_COLUMNS 144
+#define ARRAY_ROWS 1
+
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 
-void led_blinking_task(void);
-void hid_task(void);
 int led_init(void);
-int led_loop(void);
-void put_pixel2(uint8_t r, uint8_t g, uint8_t b, uint8_t i);
 void put_pixel(uint8_t r, uint8_t g, uint8_t b);
+
+
+// cols = lamps in x dimension
+// rows = lamps in y dimension
+// xSpaceInMicroMeters is distance between lamps in x dimension
+// ySpaceInMicroMeters is distance between lamps in y dimension
+void GenerateLampArrayAttributes(int cols, int rows, int xSpaceInMicroMeters, int ySpaceInMicroMeters)
+{
+  _lampArrayAttributesReport.LampCount = cols * rows;
+  _lampArrayAttributesReport.LampArrayKind = 0x1;
+  _lampArrayAttributesReport.BoundingBoxDepth = 0x1;
+  _lampArrayAttributesReport.BoundingBoxHeight = rows * ySpaceInMicroMeters;
+  _lampArrayAttributesReport.BoundingBoxWidth = cols * xSpaceInMicroMeters;
+  _lampArrayAttributesReport.MinUpdateIntervalInMicroseconds = 33000;
+
+  _cachedStateReadFrom = (LampArrayColor *)malloc(sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
+  _cachedStateWriteTo = (LampArrayColor *)malloc(sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
+  _lampAttributesReports = (LampAttributesResponseReport *)malloc(sizeof(LampAttributesResponseReport) * _lampArrayAttributesReport.LampCount);
+
+  memset(_cachedStateReadFrom, 0, sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
+  memset(_cachedStateWriteTo, 0, sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
+  memset(_lampAttributesReports, 0, sizeof(LampAttributesResponseReport) * _lampArrayAttributesReport.LampCount);
+  
+  for (int y = 0; y < rows; y++)
+  {
+    for(int x = 0; x < cols; x++)
+    {
+        int index = (y * cols) + x;
+
+        int xpos = 0;
+
+        // assume array starts at top left and proceeds in a zig-zag pattern  
+        if ((y + 1) % 2 != 0)
+        {
+           xpos = x * xSpaceInMicroMeters;
+        }
+        else
+        {
+           xpos = (cols - x - 1) * xSpaceInMicroMeters;
+        }
+        
+        LampAttributesResponseReport r = {};
+
+        r.LampId = index;
+        r.PositionX = xpos;
+        r.PositionY = y * ySpaceInMicroMeters;
+        r.PositionZ = 0;
+        r.UpdateLatency = 0x4000;
+        r.LampPurpose = 0x02;
+        r.RedChannelsCount = 0xFF;
+        r.GreenChannelsCount = 0xFF;
+        r.BlueChannelsCount = 0xFF;
+        r.GainChannelsCount = 0xFF;
+        r.IsProgrammable = 0x01;
+        r.LampKey = 0x00;           // keyboard HID usage mapping
+
+        _lampAttributesReports[index] = r;
+    }
+  }
+}
+
+
+//--------------------------------------------------------------------+
+// BLINKING TASK
+//--------------------------------------------------------------------+
+void led_blinking_task(void)
+{
+  static uint32_t start_ms = 0;
+  static bool led_state = false;
+
+  // blink is disabled
+  if (!blink_interval_ms) return;
+
+  // Blink every interval ms
+  if ( board_millis() - start_ms < blink_interval_ms) return; // not enough time
+  start_ms += blink_interval_ms;
+
+  board_led_write(led_state);
+  led_state = 1 - led_state; // toggle
+}
+
 
 void core1(void)
 {
@@ -64,58 +152,35 @@ void core1(void)
 
   while (1)
   {
-    //led_loop();
-    for (int i = 0; i < LAMP_COUNT; i++)
+    // this could be set up as DMA
+    for (int i = 0; i < _lampArrayAttributesReport.LampCount; i++)
     {
         put_pixel(
-            _cachedStateReadFrom.Colors[i].RedChannel, 
-            _cachedStateReadFrom.Colors[i].GreenChannel, 
-            _cachedStateReadFrom.Colors[i].BlueChannel);
+            _cachedStateReadFrom[i].RedChannel, 
+            _cachedStateReadFrom[i].GreenChannel, 
+            _cachedStateReadFrom[i].BlueChannel);
     }
-    sleep_ms(5);
+
+    sleep_ms(50);
   }
 }
 
 /*------------- MAIN -------------*/
 int main(void)
 {
+  set_sys_clock_khz(192000, false);
 
-//  stdio_init_all();
-//  setup_default_uart();
+  GenerateLampArrayAttributes(ARRAY_COLUMNS, ARRAY_ROWS, 10000, 10000);
 
-  board_init();
   tusb_init();
+  board_init();
 
   multicore_launch_core1(core1);
-
-  memset(&_cachedStateWriteTo, 0, sizeof(_cachedStateWriteTo));
-  memset(&_cachedStateReadFrom, 0, sizeof(_cachedStateReadFrom));
 
   while (1)
   {
     tud_task(); // tinyusb device task
     led_blinking_task();
-
-    hid_task();
-
-#if 0
-    for (int i = 0; i < LAMP_COUNT; i++)
-    {
-        // Ignore the gain channel, only care about RGB.
-        if (_cachedStateDisplaying.Colors[i].RedChannel != _cachedStateReadFrom.Colors[i].RedChannel || 
-            _cachedStateDisplaying.Colors[i].GreenChannel != _cachedStateReadFrom.Colors[i].GreenChannel || 
-            _cachedStateDisplaying.Colors[i].BlueChannel != _cachedStateReadFrom.Colors[i].BlueChannel)
-        {
-            // Update the current color (cache and set pixel state)
-            memcpy(&(_cachedStateDisplaying.Colors[i]), &(_cachedStateReadFrom.Colors[i]), sizeof(LampArrayColor));
-            put_pixel2( i, 
-                _cachedStateDisplaying.Colors[i].RedChannel, 
-                _cachedStateDisplaying.Colors[i].GreenChannel, 
-                _cachedStateDisplaying.Colors[i].BlueChannel);
-        }
-    }
-#endif
-
   }
 
   return 0;
@@ -152,159 +217,3 @@ void tud_resume_cb(void)
   blink_interval_ms = BLINK_MOUNTED;
 }
 
-//--------------------------------------------------------------------+
-// USB HID
-//--------------------------------------------------------------------+
-
-static void send_hid_report(uint8_t report_id, uint32_t btn)
-{
-  // skip if hid is not ready yet
-  if ( !tud_hid_ready() ) return;
-
-  switch(report_id)
-  {
-    case REPORT_ID_KEYBOARD:
-    {
-      // use to avoid send multiple consecutive zero report for keyboard
-      static bool has_keyboard_key = false;
-
-      if ( btn )
-      {
-        uint8_t keycode[6] = { 0 };
-        keycode[0] = HID_KEY_A;
-
-        tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
-        has_keyboard_key = true;
-      }
-      else
-      {
-        // send empty key report if previously has key pressed
-        if (has_keyboard_key) tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
-        has_keyboard_key = false;
-      }
-    }
-    break;
-
-    case REPORT_ID_MOUSE:
-    {
-      int8_t const delta = 5;
-
-      // no button, right + down, no scroll, no pan
-      tud_hid_mouse_report(REPORT_ID_MOUSE, 0x00, delta, delta, 0, 0);
-    }
-    break;
-
-    case REPORT_ID_CONSUMER_CONTROL:
-    {
-      // use to avoid send multiple consecutive zero report
-      static bool has_consumer_key = false;
-
-      if ( btn )
-      {
-        // volume down
-        uint16_t volume_down = HID_USAGE_CONSUMER_VOLUME_DECREMENT;
-        tud_hid_report(REPORT_ID_CONSUMER_CONTROL, &volume_down, 2);
-        has_consumer_key = true;
-      }else
-      {
-        // send empty key report (release key) if previously has key pressed
-        uint16_t empty_key = 0;
-        if (has_consumer_key) tud_hid_report(REPORT_ID_CONSUMER_CONTROL, &empty_key, 2);
-        has_consumer_key = false;
-      }
-    }
-    break;
-
-    case REPORT_ID_GAMEPAD:
-    {
-      // use to avoid send multiple consecutive zero report for keyboard
-      static bool has_gamepad_key = false;
-
-      hid_gamepad_report_t report =
-      {
-        .x   = 0, .y = 0, .z = 0, .rz = 0, .rx = 0, .ry = 0,
-        .hat = 0, .buttons = 0
-      };
-
-      if ( btn )
-      {
-        report.hat = GAMEPAD_HAT_UP;
-        report.buttons = GAMEPAD_BUTTON_A;
-        tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
-
-        has_gamepad_key = true;
-      }else
-      {
-        report.hat = GAMEPAD_HAT_CENTERED;
-        report.buttons = 0;
-        if (has_gamepad_key) tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
-        has_gamepad_key = false;
-      }
-    }
-    break;
-
-    default: break;
-  }
-}
-
-// Every 10ms, we will sent 1 report for each HID profile (keyboard, mouse etc ..)
-// tud_hid_report_complete_cb() is used to send the next report after previous one is complete
-void hid_task(void)
-{
-  // Poll every 10ms
-  const uint32_t interval_ms = 100;
-  static uint32_t start_ms = 0;
-
-  if ( board_millis() - start_ms < interval_ms) return; // not enough time
-  start_ms += interval_ms;
-
-  uint32_t const btn = board_button_read();
-
-  // Remote wakeup
-  if ( tud_suspended() && btn )
-  {
-    // Wake up host if we are in suspend mode
-    // and REMOTE_WAKEUP feature is enabled by host
-    tud_remote_wakeup();
-  }
-  else
-  {
-    // Send the 1st of report chain, the rest will be sent by tud_hid_report_complete_cb()
-    //send_hid_report(REPORT_ID_KEYBOARD, btn);
-  }
-}
-
-// Invoked when sent REPORT successfully to host
-// Application can use this to send the next report
-// Note: For composite reports, report[0] is report ID
-void tud_hid_report_complete_cb(uint8_t instance, uint8_t const* report, uint8_t len)
-{
-  (void) instance;
-  (void) len;
-
-  uint8_t next_report_id = report[0] + 1;
-
-  if (next_report_id < REPORT_ID_COUNT)
-  {
-    send_hid_report(next_report_id, board_button_read());
-  }
-}
-
-//--------------------------------------------------------------------+
-// BLINKING TASK
-//--------------------------------------------------------------------+
-void led_blinking_task(void)
-{
-  static uint32_t start_ms = 0;
-  static bool led_state = false;
-
-  // blink is disabled
-  if (!blink_interval_ms) return;
-
-  // Blink every interval ms
-  if ( board_millis() - start_ms < blink_interval_ms) return; // not enough time
-  start_ms += blink_interval_ms;
-
-  board_led_write(led_state);
-  led_state = 1 - led_state; // toggle
-}

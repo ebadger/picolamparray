@@ -71,6 +71,7 @@ set(CMAKE_MAKEFILE_DEPENDS
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/boot_stage2/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/cmsis/CMakeLists.txt"
+  "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/cyw43_driver/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/hardware_adc/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/hardware_base/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/hardware_claim/CMakeLists.txt"
@@ -99,13 +100,16 @@ set(CMAKE_MAKEFILE_DEPENDS
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_bootrom/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_bootsel_via_double_reset/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_cxx_options/CMakeLists.txt"
+  "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_cyw43_arch/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_divider/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_double/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_fix/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_fix/rp2040_usb_device_enumeration/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_float/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_int64_ops/CMakeLists.txt"
+  "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_lwip/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_malloc/CMakeLists.txt"
+  "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_mbedtls/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_mem_ops/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_multicore/CMakeLists.txt"
   "C:/msys64/home/ebadger/pico-sdk/src/rp2_common/pico_platform/CMakeLists.txt"
@@ -128,7 +132,7 @@ set(CMAKE_MAKEFILE_DEPENDS
   "CMakeFiles/3.23.0-rc5/CMakeCXXCompiler.cmake"
   "CMakeFiles/3.23.0-rc5/CMakeSystem.cmake"
   "elf2uf2/tmp/ELF2UF2Build-mkdirs.cmake"
-  "pioasm/tmp/PioasmBuild-mkdirs.cmake"
+  "pico-sdk/src/rp2_common/cyw43_driver/pioasm/tmp/PioasmBuild-mkdirs.cmake"
   )
 
 # The corresponding makefile is:
@@ -139,9 +143,6 @@ set(CMAKE_MAKEFILE_OUTPUTS
 
 # Byproducts of CMake generate step:
 set(CMAKE_MAKEFILE_PRODUCTS
-  "pioasm/tmp/PioasmBuild-mkdirs.cmake"
-  "pioasm/src/PioasmBuild-stamp/PioasmBuild-source_dirinfo.txt"
-  "pioasm/tmp/PioasmBuild-cfgcmd.txt"
   "elf2uf2/tmp/ELF2UF2Build-mkdirs.cmake"
   "elf2uf2/src/ELF2UF2Build-stamp/ELF2UF2Build-source_dirinfo.txt"
   "elf2uf2/tmp/ELF2UF2Build-cfgcmd.txt"
@@ -208,6 +209,14 @@ set(CMAKE_MAKEFILE_PRODUCTS
   "pico-sdk/src/rp2_common/cmsis/CMakeFiles/CMakeDirectoryInformation.cmake"
   "pico-sdk/src/rp2_common/tinyusb/CMakeFiles/CMakeDirectoryInformation.cmake"
   "pico-sdk/src/rp2_common/pico_stdio_usb/CMakeFiles/CMakeDirectoryInformation.cmake"
+  "pico-sdk/src/rp2_common/cyw43_driver/pioasm/tmp/PioasmBuild-mkdirs.cmake"
+  "pico-sdk/src/rp2_common/cyw43_driver/pioasm/src/PioasmBuild-stamp/PioasmBuild-source_dirinfo.txt"
+  "pico-sdk/src/rp2_common/cyw43_driver/pioasm/tmp/PioasmBuild-cfgcmd.txt"
+  "pico-sdk/src/rp2_common/cyw43_driver/pioasm/tmp/PioasmBuild-cache-Debug.cmake"
+  "pico-sdk/src/rp2_common/cyw43_driver/CMakeFiles/CMakeDirectoryInformation.cmake"
+  "pico-sdk/src/rp2_common/pico_lwip/CMakeFiles/CMakeDirectoryInformation.cmake"
+  "pico-sdk/src/rp2_common/pico_cyw43_arch/CMakeFiles/CMakeDirectoryInformation.cmake"
+  "pico-sdk/src/rp2_common/pico_mbedtls/CMakeFiles/CMakeDirectoryInformation.cmake"
   "pico-sdk/src/rp2_common/pico_stdlib/CMakeFiles/CMakeDirectoryInformation.cmake"
   "pico-sdk/src/rp2_common/pico_cxx_options/CMakeFiles/CMakeDirectoryInformation.cmake"
   "pico-sdk/src/rp2_common/pico_standard_link/CMakeFiles/CMakeDirectoryInformation.cmake"
@@ -223,10 +232,12 @@ set(CMAKE_MAKEFILE_PRODUCTS
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/pico_lamp_array.dir/DependInfo.cmake"
-  "CMakeFiles/PioasmBuild.dir/DependInfo.cmake"
   "CMakeFiles/pico_lamp_array_ws2812_pio_h.dir/DependInfo.cmake"
   "CMakeFiles/ELF2UF2Build.dir/DependInfo.cmake"
   "pico-sdk/src/rp2_common/boot_stage2/CMakeFiles/bs2_default.dir/DependInfo.cmake"
   "pico-sdk/src/rp2_common/boot_stage2/CMakeFiles/bs2_default_bin.dir/DependInfo.cmake"
   "pico-sdk/src/rp2_common/boot_stage2/CMakeFiles/bs2_default_padded_checksummed_asm.dir/DependInfo.cmake"
+  "pico-sdk/src/rp2_common/cyw43_driver/CMakeFiles/cyw43_firmware_package.dir/DependInfo.cmake"
+  "pico-sdk/src/rp2_common/cyw43_driver/CMakeFiles/PioasmBuild.dir/DependInfo.cmake"
+  "pico-sdk/src/rp2_common/cyw43_driver/CMakeFiles/cyw43_driver_picow_cyw43_bus_pio_spi_pio_h.dir/DependInfo.cmake"
   )

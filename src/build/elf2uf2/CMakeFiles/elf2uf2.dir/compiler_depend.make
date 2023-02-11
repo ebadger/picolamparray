@@ -59,6 +59,9 @@ CMakeFiles/elf2uf2.dir/main.cpp.obj: C:/msys64/home/ebadger/pico-sdk/tools/elf2u
   C:/msys64/mingw64/include/c++/11.2.0/bits/invoke.h \
   C:/msys64/mingw64/include/c++/11.2.0/bits/stl_multimap.h \
   C:/msys64/mingw64/include/c++/11.2.0/bits/erase_if.h \
+  C:/msys64/mingw64/include/c++/11.2.0/set \
+  C:/msys64/mingw64/include/c++/11.2.0/bits/stl_set.h \
+  C:/msys64/mingw64/include/c++/11.2.0/bits/stl_multiset.h \
   C:/msys64/mingw64/include/c++/11.2.0/vector \
   C:/msys64/mingw64/include/c++/11.2.0/bits/stl_uninitialized.h \
   C:/msys64/mingw64/include/c++/11.2.0/bits/stl_vector.h \
@@ -100,6 +103,8 @@ CMakeFiles/elf2uf2.dir/main.cpp.obj: C:/msys64/home/ebadger/pico-sdk/tools/elf2u
 
 
 C:/msys64/mingw64/include/c++/11.2.0/tuple:
+
+C:/msys64/mingw64/include/c++/11.2.0/bits/stl_multiset.h:
 
 C:/msys64/mingw64/include/c++/11.2.0/ext/type_traits.h:
 
@@ -161,8 +166,6 @@ C:/msys64/mingw64/include/c++/11.2.0/bits/exception_defines.h:
 
 C:/msys64/mingw64/include/c++/11.2.0/bits/cpp_type_traits.h:
 
-C:/msys64/mingw64/include/c++/11.2.0/bits/functional_hash.h:
-
 C:/msys64/mingw64/include/c++/11.2.0/debug/assertions.h:
 
 C:/msys64/mingw64/include/c++/11.2.0/ext/numeric_traits.h:
@@ -188,8 +191,6 @@ C:/msys64/mingw64/include/c++/11.2.0/bits/predefined_ops.h:
 C:/msys64/mingw64/include/c++/11.2.0/bits/exception.h:
 
 C:/msys64/mingw64/include/c++/11.2.0/bits/allocator.h:
-
-C:/msys64/mingw64/include/c++/11.2.0/bits/hash_bytes.h:
 
 C:/msys64/mingw64/include/c++/11.2.0/x86_64-w64-mingw32/bits/c++allocator.h:
 
@@ -225,11 +226,19 @@ C:/msys64/mingw64/include/c++/11.2.0/bits/stl_multimap.h:
 
 C:/msys64/mingw64/include/c++/11.2.0/bits/erase_if.h:
 
+C:/msys64/mingw64/include/c++/11.2.0/set:
+
 C:/msys64/mingw64/include/c++/11.2.0/vector:
+
+C:/msys64/mingw64/include/c++/11.2.0/bits/stl_set.h:
 
 C:/msys64/mingw64/include/c++/11.2.0/bits/stl_vector.h:
 
 C:/msys64/mingw64/include/c++/11.2.0/bits/stl_bvector.h:
+
+C:/msys64/mingw64/include/c++/11.2.0/bits/functional_hash.h:
+
+C:/msys64/mingw64/include/c++/11.2.0/bits/hash_bytes.h:
 
 C:/msys64/mingw64/include/c++/11.2.0/bits/vector.tcc:
 

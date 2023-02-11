@@ -26,11 +26,13 @@
 #include "tusb.h"
 #include "usb_descriptors.h"
 
-LampArrayState _cachedStateWriteTo;
-LampArrayState _cachedStateReadFrom;
+extern LampArrayColor *_cachedStateWriteTo;
+extern LampArrayColor *_cachedStateReadFrom;
+extern LampAttributesResponseReport *_lampAttributesReports;
+extern LampArrayAttributesReport _lampArrayAttributesReport;
+
 uint16_t _lastLampIdRequested = 0;
 bool _autonomousMode = true;
-
 
 /* A combination of interfaces must have a unique product id, since PC will save device driver after the first plug.
  * Same VID/PID with different interface e.g MSC (first), then CDC (later) will possibly cause system error on PC.
@@ -97,7 +99,7 @@ uint8_t const * tud_hid_descriptor_report_cb(uint8_t instance)
 {
   (void) instance;
   //return desc_hid_report;
-  return s_hidReportDescriptor;
+  return _hidReportDescriptor;
 }
 
 //--------------------------------------------------------------------+
@@ -120,7 +122,7 @@ uint8_t const desc_configuration[] =
   TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
 
   // Interface number, string index, protocol, report descriptor len, EP In address, size & polling interval
-  TUD_HID_DESCRIPTOR(ITF_NUM_HID, 0, HID_ITF_PROTOCOL_NONE, sizeof(s_hidReportDescriptor), EPNUM_HID, CFG_TUD_HID_EP_BUFSIZE, 5)
+  TUD_HID_DESCRIPTOR(ITF_NUM_HID, 0, HID_ITF_PROTOCOL_NONE, sizeof(_hidReportDescriptor), EPNUM_HID, CFG_TUD_HID_EP_BUFSIZE, 5)
 };
 
 #if TUD_OPT_HIGH_SPEED
@@ -249,15 +251,15 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_t
     switch(report_id)
     {
         case LAMP_ARRAY_ATTRIBUTES_REPORT_ID:
-          len = sizeof(s_lampArrayAttributesReport);
-          memcpy (buffer, &s_lampArrayAttributesReport, len);
+          len = sizeof(_lampArrayAttributesReport);
+          memcpy (buffer, &_lampArrayAttributesReport, len);
           break;
         case LAMP_ATTRIBUTES_RESPONSE_REPORT_ID:
           len = sizeof(LampAttributesResponseReport);
-          memcpy (buffer, &s_lampAttributesReports[_lastLampIdRequested], len);
+          memcpy (buffer, &_lampAttributesReports[_lastLampIdRequested], len);
           _lastLampIdRequested++;
 
-          if (_lastLampIdRequested >= LAMP_COUNT)
+          if (_lastLampIdRequested >= _lampArrayAttributesReport.LampCount)
           {
             _lastLampIdRequested = 0;
           }
@@ -292,19 +294,19 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
           memcpy(&rangeReport, buffer, sizeof(LampRangeUpdateReport));
 
           // Ignore update if not within bounds.
-          if (rangeReport.LampIdStart >= 0 && rangeReport.LampIdStart < LAMP_COUNT && 
-              rangeReport.LampIdEnd >= 0 && rangeReport.LampIdEnd < LAMP_COUNT && 
+          if (rangeReport.LampIdStart >= 0 && rangeReport.LampIdStart < _lampArrayAttributesReport.LampCount && 
+              rangeReport.LampIdEnd >= 0 && rangeReport.LampIdEnd < _lampArrayAttributesReport.LampCount && 
               rangeReport.LampIdStart <= rangeReport.LampIdEnd)
           {
               for (uint16_t i = rangeReport.LampIdStart; i <= rangeReport.LampIdEnd; i++)
               {
-                  _cachedStateWriteTo.Colors[i] = rangeReport.UpdateColor;
+                  _cachedStateWriteTo[i] = rangeReport.UpdateColor;
               }
 
               // Don't want the consumer to update before the Host has completed the batch of updates.
               if (rangeReport.LampUpdateFlags & LAMP_UPDATE_FLAG_UPDATE_COMPLETE)
               {
-                  _cachedStateReadFrom = _cachedStateWriteTo;
+                  memcpy(_cachedStateReadFrom, _cachedStateWriteTo, _lampArrayAttributesReport.LampCount * sizeof(LampArrayColor)); 
               }
           }
 
@@ -321,16 +323,16 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
           for (uint8_t i = 0; i < multiReport.LampCount; i++)
           {
               // Ignore update if not within bounds.
-              if (multiReport.LampIds[i] < LAMP_COUNT)
+              if (multiReport.LampIds[i] < _lampArrayAttributesReport.LampCount)
               {
-                  _cachedStateWriteTo.Colors[multiReport.LampIds[i]] = multiReport.UpdateColors[i];
+                  _cachedStateWriteTo[multiReport.LampIds[i]] = multiReport.UpdateColors[i];
               }
           }
 
           // Don't want the consumer to update before the Host has completed the batch of updates.
           if (multiReport.LampUpdateFlags & LAMP_UPDATE_FLAG_UPDATE_COMPLETE)
           {
-              _cachedStateReadFrom = _cachedStateWriteTo;
+              memcpy(_cachedStateReadFrom, _cachedStateWriteTo, sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
           }
           break;
 
@@ -343,7 +345,7 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
           memcpy(&attributesReport, buffer, sizeof(LampAttributesRequestReport));
 
           // Per HID spec, if not within bounds, always set LampId to 0.
-          if (attributesReport.LampId < LAMP_COUNT)
+          if (attributesReport.LampId < _lampArrayAttributesReport.LampCount)
           {
               _lastLampIdRequested = attributesReport.LampId;
           }
@@ -367,8 +369,8 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
 
           if (_autonomousMode)
           {
-              memset(&_cachedStateReadFrom, 0, sizeof(_cachedStateReadFrom));
-              memset(&_cachedStateWriteTo, 0, sizeof(_cachedStateWriteTo));
+              memset(_cachedStateReadFrom, 0, sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
+              memset(_cachedStateWriteTo, 0, sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
           }
 
           break;
