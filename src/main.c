@@ -28,6 +28,8 @@
 #include <string.h>
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
+#include "hardware/dma.h"
+#include "hardware/pio.h"
 
 #include "bsp/board.h"
 #include "tusb.h"
@@ -35,17 +37,33 @@
 #include "usb_descriptors.h"
 #include "lamparrayhiddescriptor.h"
 
+#include "ws2812.pio.h"
+
+#define WS2812_PIN    2
+#define FREQ          1200000
+
+#define ARRAY_COLUMNS 144
+#define ARRAY_ROWS    1
+#define ARRAY_SIZE    (ARRAY_COLUMNS * ARRAY_ROWS)
+
+#define X_MARGIN      10000 // micrometers
+#define Y_MARGIN      10000 // micrometers
+
 LampArrayColor *_cachedStateWriteTo = NULL;
 LampArrayColor *_cachedStateReadFrom = NULL;
 LampAttributesResponseReport *_lampAttributesReports = NULL;
 LampArrayAttributesReport _lampArrayAttributesReport = {};
 
+int dma_0 = 0;
+int sm_0 = 0;
+
+uint32_t _mempixels[ARRAY_SIZE] = {};
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF PROTYPES
 //--------------------------------------------------------------------+
 
-/* Blink pattern
+/* Blink pattern for onboard LED to relay USB state
  * - 250 ms  : device not mounted
  * - 1000 ms : device mounted
  * - 2500 ms : device is suspended
@@ -56,16 +74,61 @@ enum  {
   BLINK_SUSPENDED = 2500,
 };
 
-
-#define ARRAY_COLUMNS 48
-#define ARRAY_ROWS 1
-
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 
-int led_init(void);
-void put_pixel(uint8_t r, uint8_t g, uint8_t b);
+static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) 
+{
+    return
+            ((uint32_t) (r) << 8) |
+            ((uint32_t) (g) << 16) |
+            (uint32_t) (b);
+}
 
+void put_pixel(int pixel, uint8_t r, uint8_t g, uint8_t b)
+{
+    uint32_t pixel_grb = urgb_u32(r,g,b);
+    _mempixels[pixel] = pixel_grb << 8u;
+}
 
+void startdma()
+{
+  // Channel Zero (sends color data to PIO VGA machine)
+  dma_channel_config c0 = dma_channel_get_default_config(dma_0);  // default configs
+  channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);             // 32-bit txfers
+  channel_config_set_read_increment(&c0, true);                        // yes read incrementing
+  channel_config_set_write_increment(&c0, false);                      // no write incrementing
+  channel_config_set_dreq(&c0, DREQ_PIO0_TX0) ;                        // DREQ_PIO0_TX2 pacing (FIFO)
+
+  dma_channel_configure(
+      dma_0,                      // Channel to be configured
+      &c0,                        // The configuration we just created
+      &pio0->txf[sm_0],           // write address (RGB PIO TX FIFO)
+      &_mempixels,                // The initial read address (pixel color array)
+      ARRAY_SIZE,                 // Number of transfers; in this case each is 4 bytes.
+      true                        // start immediately.
+  );
+}
+
+void stopdma()
+{
+  hw_clear_bits(&dma_hw->ch[dma_0].al1_ctrl, DMA_CH0_CTRL_TRIG_EN_BITS);
+
+  //dma_channel_abort(dma_0);
+  dma_hw->abort = (1 << dma_0);
+  // Wait for all aborts to complete
+  while (dma_hw->abort) 
+  { 
+    sleep_us(1);
+  }
+
+  // Wait for transfer channel to not be busy.
+  while (dma_hw->ch[dma_0].ctrl_trig & DMA_CH0_CTRL_TRIG_BUSY_BITS)
+  {
+    sleep_us(1);
+  }
+}
+
+// dynamically generate the array attributes to enable various array configurations
 // cols = lamps in x dimension
 // rows = lamps in y dimension
 // xSpaceInMicroMeters is distance between lamps in x dimension
@@ -146,31 +209,35 @@ void led_blinking_task(void)
 }
 
 
+// Core1 triggers DMA in a tight loop, with 350us delay to signal reset to LED strip
 void core1(void)
 {
-  led_init();
+  stdio_init_all();
+  printf("WS2812 Smoke Test, using pin %d", WS2812_PIN);
+
+  PIO pio = pio0;
+  uint offset = pio_add_program(pio, &ws2812_program);
+
+  ws2812_program_init(pio, sm_0, offset, WS2812_PIN, FREQ);
+
+  pio_sm_set_enabled(pio0, sm_0, true);
 
   while (1)
   {
-    // this could be set up as DMA
-    for (int i = 0; i < _lampArrayAttributesReport.LampCount; i++)
-    {
-        put_pixel(
-            _cachedStateReadFrom[i].RedChannel, 
-            _cachedStateReadFrom[i].GreenChannel, 
-            _cachedStateReadFrom[i].BlueChannel);
-    }
-
-    sleep_ms(50);
+      startdma();
+      while(dma_hw->ch[dma_0].transfer_count > 0)
+      {
+        sleep_us(1);
+      }      
+      stopdma();
+      sleep_us(350);
   }
 }
 
-/*------------- MAIN -------------*/
+// Main handles USB and HID
 int main(void)
 {
-  set_sys_clock_khz(192000, false);
-
-  GenerateLampArrayAttributes(ARRAY_COLUMNS, ARRAY_ROWS, 10000, 10000);
+  GenerateLampArrayAttributes(ARRAY_COLUMNS, ARRAY_ROWS, X_MARGIN, Y_MARGIN);
 
   tusb_init();
   board_init();
@@ -181,13 +248,34 @@ int main(void)
   {
     tud_task(); // tinyusb device task
     led_blinking_task();
+
+    // populate the memory with grb data for LED strip in the main loop
+
+    for (int i = 0; i < _lampArrayAttributesReport.LampCount; i++)
+    {
+        float r = _cachedStateReadFrom[i].RedChannel;
+        float g = _cachedStateReadFrom[i].GreenChannel;
+        float b = _cachedStateReadFrom[i].BlueChannel;
+        float gain = (float)_cachedStateReadFrom[i].GainChannel / _lampAttributesReports[i].GainChannelsCount;
+        
+        if (_cachedStateReadFrom[i].GainChannel <= 2)
+        {
+          gain = 0.0f;
+        }
+
+        put_pixel(
+            i,
+            (uint8_t)(r*gain),
+            (uint8_t)(g*gain),
+            (uint8_t)(b*gain));
+    }
   }
 
   return 0;
 }
 
 //--------------------------------------------------------------------+
-// Device callbacks
+// USB callbacks
 //--------------------------------------------------------------------+
 
 // Invoked when device is mounted
