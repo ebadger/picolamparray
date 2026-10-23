@@ -3,11 +3,17 @@
 #pragma once
 #include <stdlib.h>
 
+// Pointer to a buffer of per-lamp colors. Not currently used by this firmware:
+// the lamp state lives in the _cachedState* buffers in main.c.
 typedef struct __attribute__ ((__packed__)) LampArrayState_
 {
     LampArrayColor *Colors;
 } LampArrayState;
 
+// Legacy, statically defined layout for a 256-lamp (32 x 8) array with 10 mm
+// spacing, numbered column by column. Disabled (#if 0) because the layout is
+// now generated at runtime by GenerateLampArrayAttributes() in main.c; kept
+// for reference only.
 #if 0
 static const LampAttributesResponseReport s_lampAttributesReports[]  = 
 {

@@ -23,6 +23,10 @@
  *
  */
 
+// TinyUSB configuration for the Pico LampArray: USB device mode with a single
+// HID interface (the LampArray) and no other device classes. TinyUSB finds
+// this file through the include directory set in CMakeLists.txt.
+
 #ifndef _TUSB_CONFIG_H_
 #define _TUSB_CONFIG_H_
 
@@ -95,6 +99,8 @@
 #endif
 
 //------------- CLASS -------------//
+// One HID interface (the LampArray); all other classes are disabled. Without
+// CDC there is no USB serial port, so stdio over USB is not available.
 #define CFG_TUD_HID               1
 #define CFG_TUD_CDC               0
 #define CFG_TUD_MSC               0
@@ -102,6 +108,8 @@
 #define CFG_TUD_VENDOR            0
 
 // HID buffer size Should be sufficient to hold ID (if any) + Data
+// TinyUSB also uses this buffer for feature reports, so it must fit the largest
+// LampArray report: LampMultiUpdateReport (50 bytes) plus its report ID.
 #define CFG_TUD_HID_EP_BUFSIZE    64
 
 #ifdef __cplusplus

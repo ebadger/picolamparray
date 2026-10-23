@@ -23,6 +23,27 @@
  *
  */
 
+/*
+ * Pico LampArray
+ *
+ * Firmware for a Raspberry Pi Pico (RP2040) that exposes a strip of WS2812
+ * ("NeoPixel") LEDs to a USB host as a HID LampArray (HID usage page 0x59,
+ * Lighting and Illumination). Hosts that support LampArray, such as Windows
+ * Dynamic Lighting, can then discover the LEDs, learn their physical layout
+ * and set their colors without a custom driver.
+ *
+ * The work is split across the RP2040's two cores:
+ *
+ *  - Core 0 (main): runs the TinyUSB device stack. LampArray reports from the
+ *    host are handled in usb_descriptors.c, which updates the lamp color
+ *    buffers declared below. The main loop then converts the current colors,
+ *    scaled by each lamp's gain (brightness), into WS2812 pixel data.
+ *
+ *  - Core 1 (core1): owns the LED output. It repeatedly streams the pixel
+ *    data to a PIO state machine with DMA; the PIO program (ws2812.pio)
+ *    generates the WS2812 waveform on WS2812_PIN.
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -39,24 +60,44 @@
 
 #include "ws2812.pio.h"
 
+// GPIO connected to the data input (DIN) of the first LED on the strip.
 #define WS2812_PIN    2
+// WS2812 data rate in bits per second; sets the PIO clock divider.
+// (The nominal WS2812 rate is 800 kHz; this project drives the strip faster.)
 #define FREQ          1200000
 
+// Lamp array geometry. Lamps are numbered 0..ARRAY_SIZE-1 in the order the
+// LEDs appear along the strip; GenerateLampArrayAttributes() derives each
+// lamp's physical position from its row and column.
 #define ARRAY_COLUMNS 144
 #define ARRAY_ROWS    1
 #define ARRAY_SIZE    (ARRAY_COLUMNS * ARRAY_ROWS)
 
+// Spacing between neighboring lamps, reported to the host so it can map
+// lighting effects onto the physical layout.
 #define X_MARGIN      10000 // micrometers
 #define Y_MARGIN      10000 // micrometers
 
+// Lamp color state, shared with the HID report handlers in usb_descriptors.c.
+// Host updates are written to _cachedStateWriteTo and copied to
+// _cachedStateReadFrom only when the host marks a batch of updates complete,
+// so a partially updated frame is never shown. The main loop renders from
+// _cachedStateReadFrom.
 LampArrayColor *_cachedStateWriteTo = NULL;
 LampArrayColor *_cachedStateReadFrom = NULL;
+// Per-lamp attributes (position, purpose, color levels), indexed by LampId.
 LampAttributesResponseReport *_lampAttributesReports = NULL;
+// Attributes of the array as a whole (lamp count, size, kind, update rate).
 LampArrayAttributesReport _lampArrayAttributesReport = {};
 
+// DMA channel and pio0 state machine used to drive the LED strip.
 int dma_0 = 0;
 int sm_0 = 0;
 
+// Pixel data streamed to the PIO by DMA: one 32-bit word per LED, holding the
+// 24-bit GRB color in the upper bits (the PIO shifts data out MSB first).
+// Core 0 writes it while core 1's DMA reads it; each word is written
+// atomically, so at worst one refresh mixes old and new pixel colors.
 uint32_t _mempixels[ARRAY_SIZE] = {};
 
 //--------------------------------------------------------------------+
@@ -74,9 +115,13 @@ enum  {
   BLINK_SUSPENDED = 2500,
 };
 
+// Current onboard LED blink period; updated by the USB callbacks at the end
+// of this file.
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 
-static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) 
+// Pack an RGB color into the 24-bit GRB order WS2812 LEDs expect
+// (green in bits 23..16, red in bits 15..8, blue in bits 7..0).
+static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b)
 {
     return
             ((uint32_t) (r) << 8) |
@@ -84,20 +129,26 @@ static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b)
             (uint32_t) (b);
 }
 
+// Store the color of LED 'pixel' in the DMA pixel buffer. The 24-bit GRB value
+// is shifted into the top of the word because the PIO shifts bits out MSB
+// first and pulls a new word after every 24 bits.
 void put_pixel(int pixel, uint8_t r, uint8_t g, uint8_t b)
 {
     uint32_t pixel_grb = urgb_u32(r,g,b);
     _mempixels[pixel] = pixel_grb << 8u;
 }
 
+// Start a DMA transfer that streams the whole pixel buffer (one word per LED)
+// into the TX FIFO of the WS2812 state machine. The transfer is paced by the
+// state machine's DREQ, so DMA only writes when the FIFO has room.
 void startdma()
 {
-  // Channel Zero (sends color data to PIO VGA machine)
+  // Channel Zero (sends color data to the PIO WS2812 state machine)
   dma_channel_config c0 = dma_channel_get_default_config(dma_0);  // default configs
   channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);             // 32-bit txfers
   channel_config_set_read_increment(&c0, true);                        // yes read incrementing
   channel_config_set_write_increment(&c0, false);                      // no write incrementing
-  channel_config_set_dreq(&c0, DREQ_PIO0_TX0) ;                        // DREQ_PIO0_TX2 pacing (FIFO)
+  channel_config_set_dreq(&c0, DREQ_PIO0_TX0) ;                        // DREQ_PIO0_TX0 pacing (FIFO)
 
   dma_channel_configure(
       dma_0,                      // Channel to be configured
@@ -109,10 +160,14 @@ void startdma()
   );
 }
 
+// Stop the DMA channel and wait until it is completely idle, so the next
+// startdma() call begins from a clean state.
 void stopdma()
 {
+  // Disable the channel so it cannot be triggered again.
   hw_clear_bits(&dma_hw->ch[dma_0].al1_ctrl, DMA_CH0_CTRL_TRIG_EN_BITS);
 
+  // Abort any transfer that is still in progress.
   //dma_channel_abort(dma_0);
   dma_hw->abort = (1 << dma_0);
   // Wait for all aborts to complete
@@ -133,15 +188,22 @@ void stopdma()
 // rows = lamps in y dimension
 // xSpaceInMicroMeters is distance between lamps in x dimension
 // ySpaceInMicroMeters is distance between lamps in y dimension
+//
+// Fills in _lampArrayAttributesReport, allocates the lamp color buffers (all
+// lamps start off) and builds the per-lamp attribute table that the host reads
+// through LampAttributesResponse reports. Must run before USB is started,
+// because the HID report handlers use these tables.
 void GenerateLampArrayAttributes(int cols, int rows, int xSpaceInMicroMeters, int ySpaceInMicroMeters)
 {
+  // Array-wide attributes. Lengths are in micrometers, times in microseconds.
   _lampArrayAttributesReport.LampCount = cols * rows;
-  _lampArrayAttributesReport.LampArrayKind = 0x1;
-  _lampArrayAttributesReport.BoundingBoxDepth = 0x1;
+  _lampArrayAttributesReport.LampArrayKind = 0x1;           // 1 = LampArrayKindKeyboard
+  _lampArrayAttributesReport.BoundingBoxDepth = 0x1;        // effectively flat
   _lampArrayAttributesReport.BoundingBoxHeight = rows * ySpaceInMicroMeters;
   _lampArrayAttributesReport.BoundingBoxWidth = cols * xSpaceInMicroMeters;
-  _lampArrayAttributesReport.MinUpdateIntervalInMicroseconds = 33000;
+  _lampArrayAttributesReport.MinUpdateIntervalInMicroseconds = 33000; // host updates at most every 33 ms (~30 Hz)
 
+  // Double-buffered lamp colors plus one attribute entry per lamp.
   _cachedStateReadFrom = (LampArrayColor *)malloc(sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
   _cachedStateWriteTo = (LampArrayColor *)malloc(sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
   _lampAttributesReports = (LampAttributesResponseReport *)malloc(sizeof(LampAttributesResponseReport) * _lampArrayAttributesReport.LampCount);
@@ -150,6 +212,7 @@ void GenerateLampArrayAttributes(int cols, int rows, int xSpaceInMicroMeters, in
   memset(_cachedStateWriteTo, 0, sizeof(LampArrayColor) * _lampArrayAttributesReport.LampCount);
   memset(_lampAttributesReports, 0, sizeof(LampAttributesResponseReport) * _lampArrayAttributesReport.LampCount);
   
+  // Describe each lamp. LampIds follow the order of the LEDs along the strip.
   for (int y = 0; y < rows; y++)
   {
     for(int x = 0; x < cols; x++)
@@ -159,6 +222,7 @@ void GenerateLampArrayAttributes(int cols, int rows, int xSpaceInMicroMeters, in
         int xpos = 0;
 
         // assume array starts at top left and proceeds in a zig-zag pattern  
+        // (serpentine): even rows run left to right, odd rows right to left.
         if ((y + 1) % 2 != 0)
         {
            xpos = x * xSpaceInMicroMeters;
@@ -174,14 +238,14 @@ void GenerateLampArrayAttributes(int cols, int rows, int xSpaceInMicroMeters, in
         r.PositionX = xpos;
         r.PositionY = y * ySpaceInMicroMeters;
         r.PositionZ = 0;
-        r.UpdateLatency = 0x4000;
-        r.LampPurpose = 0x02;
-        r.RedChannelsCount = 0xFF;
+        r.UpdateLatency = 0x4000;   // microseconds (~16 ms)
+        r.LampPurpose = 0x02;       // LampPurposes: Accent
+        r.RedChannelsCount = 0xFF;  // 255 levels per color channel
         r.GreenChannelsCount = 0xFF;
         r.BlueChannelsCount = 0xFF;
-        r.GainChannelsCount = 0xFF;
-        r.IsProgrammable = 0x01;
-        r.LampKey = 0x00;           // keyboard HID usage mapping
+        r.GainChannelsCount = 0xFF; // 255 intensity (brightness) levels
+        r.IsProgrammable = 0x01;    // the host can set this lamp's color
+        r.LampKey = 0x00;           // keyboard HID usage mapping (0 = not bound to a key)
 
         _lampAttributesReports[index] = r;
     }
@@ -192,6 +256,9 @@ void GenerateLampArrayAttributes(int cols, int rows, int xSpaceInMicroMeters, in
 //--------------------------------------------------------------------+
 // BLINKING TASK
 //--------------------------------------------------------------------+
+
+// Toggle the onboard LED every blink_interval_ms to show the USB state (see
+// the BLINK_* values above). Non-blocking; call it regularly from the main loop.
 void led_blinking_task(void)
 {
   static uint32_t start_ms = 0;
@@ -210,11 +277,20 @@ void led_blinking_task(void)
 
 
 // Core1 triggers DMA in a tight loop, with 350us delay to signal reset to LED strip
+//
+// Core 1 entry point: sets up the WS2812 PIO program, then refreshes the strip
+// forever. Each pass DMAs the whole _mempixels buffer to the PIO and waits for
+// the transfer to finish. Once the PIO has shifted out the last pixel, the
+// data line idles low; the LEDs treat that as a reset and latch the new
+// colors.
 void core1(void)
 {
+  // Debug output; only visible if UART stdio is enabled in CMakeLists.txt.
   stdio_init_all();
   printf("WS2812 Smoke Test, using pin %d", WS2812_PIN);
 
+  // Load the ws2812 program into pio0 and configure state machine sm_0 to
+  // drive WS2812_PIN at FREQ bits per second.
   PIO pio = pio0;
   uint offset = pio_add_program(pio, &ws2812_program);
 
@@ -225,16 +301,22 @@ void core1(void)
   while (1)
   {
       startdma();
+      // Wait until every pixel word has been handed to the PIO TX FIFO.
       while(dma_hw->ch[dma_0].transfer_count > 0)
       {
         sleep_us(1);
       }      
       stopdma();
+      // Pause before the next frame so the line stays low long enough for the
+      // LEDs to latch the colors (WS2812 reset period).
       sleep_us(350);
   }
 }
 
 // Main handles USB and HID
+//
+// Core 0 entry point: describes the lamp array, starts USB and the LED driver
+// on core 1, then services USB and renders lamp colors forever.
 int main(void)
 {
   GenerateLampArrayAttributes(ARRAY_COLUMNS, ARRAY_ROWS, X_MARGIN, Y_MARGIN);
@@ -242,10 +324,13 @@ int main(void)
   tusb_init();
   board_init();
 
+  // Start the LED output loop on the second core.
   multicore_launch_core1(core1);
 
   while (1)
   {
+    // HID reports from the host are processed inside tud_task() on this core,
+    // so the color buffers never change while the loop below reads them.
     tud_task(); // tinyusb device task
     led_blinking_task();
 
@@ -253,11 +338,14 @@ int main(void)
 
     for (int i = 0; i < _lampArrayAttributesReport.LampCount; i++)
     {
+        // Scale each color channel by the lamp's gain (intensity): GainChannel
+        // 0..GainChannelsCount becomes a 0.0..1.0 multiplier.
         float r = _cachedStateReadFrom[i].RedChannel;
         float g = _cachedStateReadFrom[i].GreenChannel;
         float b = _cachedStateReadFrom[i].BlueChannel;
         float gain = (float)_cachedStateReadFrom[i].GainChannel / _lampAttributesReports[i].GainChannelsCount;
         
+        // Treat very low gain values as fully off.
         if (_cachedStateReadFrom[i].GainChannel <= 2)
         {
           gain = 0.0f;

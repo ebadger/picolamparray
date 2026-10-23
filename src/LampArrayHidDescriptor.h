@@ -1,13 +1,30 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 
+// Define USE_HID_VALIDATOR_TOOL to place the collection on the vendor-defined
+// usage page 0xFF59 instead of the standard Lighting and Illumination page
+// (0x59), e.g. when exercising the reports with a HID validation tool. The host
+// will then no longer recognize the device as a LampArray.
 //#define USE_HID_VALIDATOR_TOOL
 
 #pragma once
 
+// HID report descriptor returned by tud_hid_descriptor_report_cb() in
+// usb_descriptors.c. It declares a single LampArray application collection
+// containing six feature reports, whose payloads are mirrored by the structs
+// in LampArrayReports.h:
+//   ID 1  LampArrayAttributesReport     read by the host    (GET_REPORT)
+//   ID 2  LampAttributesRequestReport   written by the host (SET_REPORT)
+//   ID 3  LampAttributesResponseReport  read by the host    (GET_REPORT)
+//   ID 4  LampMultiUpdateReport         written by the host (SET_REPORT)
+//   ID 5  LampRangeUpdateReport         written by the host (SET_REPORT)
+//   ID 6  LampArrayControlReport        written by the host (SET_REPORT)
+//
 // Update _pack_buffer if this gets larger than 1KB
+// (_pack_buffer is not part of this TinyUSB-based project; TinyUSB sends the
+// descriptor directly from this array.)
 static const uint8_t _hidReportDescriptor[]  = {
 #ifdef USE_HID_VALIDATOR_TOOL
-    0x06, 0x59, 0xFF,              // USAGE_PAGE (LightingAndIllumination)   
+    0x06, 0x59, 0xFF,              // USAGE_PAGE (Vendor Defined 0xFF59)
 #else
     0x05, 0x59,                    // USAGE_PAGE (LightingAndIllumination)
 #endif
@@ -44,7 +61,7 @@ static const uint8_t _hidReportDescriptor[]  = {
     0xb1, 0x02,                    //     FEATURE (Data,Var,Abs)
     0xc0,                          //   END_COLLECTION
     0x85, 0x03,                    //   REPORT_ID (3)
-    0x09, 0x22,                    //   USAGE (LampAttributesReponseReport)
+    0x09, 0x22,                    //   USAGE (LampAttributesResponseReport)
     0xa1, 0x02,                    //   COLLECTION (Logical)
     0x09, 0x21,                    //     USAGE (LampId)
     0x15, 0x00,                    //     LOGICAL_MINIMUM (0)
@@ -90,6 +107,8 @@ static const uint8_t _hidReportDescriptor[]  = {
     0x75, 0x10,                    //     REPORT_SIZE (16)
     0x95, 0x08,                    //     REPORT_COUNT (8)
     0xb1, 0x02,                    //     FEATURE (Data,Var,Abs)
+                                   //     Red/Green/Blue/Intensity usages repeated
+                                   //     for each of the 8 lamp slots (32 bytes)
     0x09, 0x51,                    //     USAGE (RedUpdateChannel)
     0x09, 0x52,                    //     USAGE (GreenUpdateChannel)
     0x09, 0x53,                    //     USAGE (BlueUpdateChannel)

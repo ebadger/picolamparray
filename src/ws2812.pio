@@ -4,9 +4,20 @@
 ; SPDX-License-Identifier: BSD-3-Clause
 ;
 
+; WS2812 (NeoPixel) output program, adapted from the Raspberry Pi pico-examples.
+;
+; Every data bit lasts T1 + T2 + T3 = 10 PIO cycles, and the pin is driven
+; entirely through side-set:
+;   1 bit: high for T1 + T2 cycles, then low for T3 cycles (long pulse)
+;   0 bit: high for T1 cycles, then low for T2 + T3 cycles (short pulse)
+; Bits are shifted out of the OSR MSB first, and autopull refills it every
+; 24 bits (one GRB pixel). When the TX FIFO runs dry, the program stalls on
+; the out instruction with the pin low, which the LEDs treat as a reset/latch.
+
 .program ws2812
 .side_set 1
 
+; Bit timing, in PIO cycles.
 .define public T1 2
 .define public T2 5
 .define public T3 3
@@ -25,16 +36,24 @@ do_zero:
 % c-sdk {
 #include "hardware/clocks.h"
 
+// Configure state machine sm to run the ws2812 program (loaded at offset) on
+// GPIO pin, sending freq bits per second. The state machine is left disabled;
+// the caller starts it with pio_sm_set_enabled().
 static inline void ws2812_program_init(PIO pio, uint sm, uint offset, uint pin, float freq) {
 
+    // Give the PIO control of the pin and make it an output.
     pio_gpio_init(pio, pin);
     pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
 
     pio_sm_config c = ws2812_program_get_default_config(offset);
+    // The data pin is driven by side-set.
     sm_config_set_sideset_pins(&c, pin);
+    // Shift left (MSB first) and autopull a new word after every 24 bits.
     sm_config_set_out_shift(&c, false, true, 24);
+    // Only TX is used, so join the RX FIFO onto it for an 8-entry TX FIFO.
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
 
+    // Run the state machine at freq * cycles_per_bit so each bit lasts 1/freq.
     int cycles_per_bit = ws2812_T1 + ws2812_T2 + ws2812_T3;
     float div = clock_get_hz(clk_sys) / (freq * cycles_per_bit);
     sm_config_set_clkdiv(&c, div);
