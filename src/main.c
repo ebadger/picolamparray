@@ -56,7 +56,7 @@
 #include "tusb.h"
 
 #include "usb_descriptors.h"
-#include "lamparrayhiddescriptor.h"
+#include "LampArrayHidDescriptor.h"
 
 #include "ws2812.pio.h"
 

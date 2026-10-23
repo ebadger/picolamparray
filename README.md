@@ -44,12 +44,9 @@ cmake --build build
 
 On Windows (PowerShell), set the variable with `$env:PICO_SDK_PATH = "C:\path\to\pico-sdk"` and choose a generator if needed, for example `cmake -S src -B build -G Ninja`.
 
-The firmware is written to `build/pico_lamp_array.uf2` (along with `.elf`, `.bin` and `.hex` files). The build also generates `src/generated/ws2812.pio.h` from `src/ws2812.pio`.
+The firmware is written to `build/pico_lamp_array.uf2` (along with `.elf`, `.bin` and `.hex` files). The build also generates `src/generated/ws2812.pio.h` from `src/ws2812.pio`. Both locations are ignored by Git.
 
-Notes:
-
-- A compiler warning that USB stdio is configured but CDC is not enabled is expected; see [Debugging](#debugging).
-- `main.c` includes `lamparrayhiddescriptor.h` in lowercase. That works on case-insensitive file systems (Windows, and macOS by default), but on Linux change it to `LampArrayHidDescriptor.h` or remove it, since `usb_descriptors.h` already includes that header.
+A compiler warning that USB stdio is configured but CDC is not enabled is expected; see [Debugging](#debugging).
 
 ## Flashing
 
@@ -177,8 +174,6 @@ src/
 ├── tusb_config.h             TinyUSB configuration (device mode, one HID interface)
 └── ws2812.pio                PIO program that generates the WS2812 waveform
 ```
-
-`src/Makefile` and `src/cmake_install.cmake` are CMake-generated files from the original development machine (they contain absolute paths) and are not used. Build in a separate directory as shown above.
 
 ## Credits
 

@@ -1,0 +1,11 @@
+# CMake build directory (see README: cmake -S src -B build)
+build/
+
+# Header generated from src/ws2812.pio during the build
+src/generated/
+
+# Files produced by an in-source CMake build
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
