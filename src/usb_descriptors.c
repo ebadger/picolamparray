@@ -23,15 +23,39 @@
  *
  */
 
+/*
+ * USB descriptors and HID LampArray report handling.
+ *
+ * The device exposes a single HID interface whose report descriptor
+ * (LampArrayHidDescriptor.h) declares a LampArray. The host talks to it only
+ * through feature reports on the control endpoint, which TinyUSB passes to
+ * tud_hid_get_report_cb() and tud_hid_set_report_cb() below:
+ *
+ *   ID  Report                        Request      Purpose
+ *   1   LampArrayAttributesReport     GET_REPORT   describe the whole array
+ *   2   LampAttributesRequestReport   SET_REPORT   pick the lamp to describe next
+ *   3   LampAttributesResponseReport  GET_REPORT   describe one lamp
+ *   4   LampMultiUpdateReport         SET_REPORT   set colors of up to 8 lamps
+ *   5   LampRangeUpdateReport         SET_REPORT   set a range of lamps to one color
+ *   6   LampArrayControlReport        SET_REPORT   enter/leave autonomous mode
+ */
+
 #include "tusb.h"
 #include "usb_descriptors.h"
 
+// Lamp state and attribute tables owned by main.c
+// (allocated by GenerateLampArrayAttributes()).
 extern LampArrayColor *_cachedStateWriteTo;
 extern LampArrayColor *_cachedStateReadFrom;
 extern LampAttributesResponseReport *_lampAttributesReports;
 extern LampArrayAttributesReport _lampArrayAttributesReport;
 
+// LampId described by the next LampAttributesResponse report. Set by a
+// LampAttributesRequest report and advanced after every response, so the host
+// can read the attributes of all lamps back-to-back.
 uint16_t _lastLampIdRequested = 0;
+// Whether the device, rather than the host, is in control of the lamps.
+// Changed by the LampArrayControl report.
 bool _autonomousMode = true;
 
 /* A combination of interfaces must have a unique product id, since PC will save device driver after the first plug.
@@ -39,17 +63,21 @@ bool _autonomousMode = true;
  *
  * Auto ProductID layout's Bitmap:
  *   [MSB]         HID | MSC | CDC          [LSB]
+ *
+ * This project enables only HID (see tusb_config.h), so USB_PID is 0x4004.
  */
 #define _PID_MAP(itf, n)  ( (CFG_TUD_##itf) << (n) )
 #define USB_PID           (0x4000 | _PID_MAP(CDC, 0) | _PID_MAP(MSC, 1) | _PID_MAP(HID, 2) | \
                            _PID_MAP(MIDI, 3) | _PID_MAP(VENDOR, 4) )
 
-#define USB_VID   0xEBAD
-#define USB_BCD   0x0200
+#define USB_VID   0xEBAD    // USB vendor ID
+#define USB_BCD   0x0200    // USB specification version (2.0)
 
 //--------------------------------------------------------------------+
 // Device Descriptors
 //--------------------------------------------------------------------+
+// The device class is left at 0 (defined per interface); the HID class is
+// declared by the interface in the configuration descriptor below.
 tusb_desc_device_t const desc_device =
 {
     .bLength            = sizeof(tusb_desc_device_t),
@@ -64,6 +92,7 @@ tusb_desc_device_t const desc_device =
     .idProduct          = USB_PID,
     .bcdDevice          = 0x0100,
 
+    // Indices into string_desc_arr (see String Descriptors below).
     .iManufacturer      = 0x01,
     .iProduct           = 0x02,
     .iSerialNumber      = 0x03,
@@ -82,6 +111,9 @@ uint8_t const * tud_descriptor_device_cb(void)
 // HID Report Descriptor
 //--------------------------------------------------------------------+
 
+// The LampArray report descriptor is _hidReportDescriptor in
+// LampArrayHidDescriptor.h. The commented-out descriptor below is left over
+// from the TinyUSB HID composite example this file is based on.
 /*
 uint8_t const desc_hid_report[] =
 {
@@ -106,6 +138,7 @@ uint8_t const * tud_hid_descriptor_report_cb(uint8_t instance)
 // Configuration Descriptor
 //--------------------------------------------------------------------+
 
+// One configuration containing a single HID interface.
 enum
 {
   ITF_NUM_HID,
@@ -114,6 +147,8 @@ enum
 
 #define  CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN)
 
+// Interrupt IN endpoint 1. HID interfaces require one, but this device sends
+// no input reports: all LampArray traffic uses feature reports on endpoint 0.
 #define EPNUM_HID   0x81
 
 uint8_t const desc_configuration[] =
@@ -127,6 +162,7 @@ uint8_t const desc_configuration[] =
 
 #if TUD_OPT_HIGH_SPEED
 // Per USB specs: high speed capable device must report device_qualifier and other_speed_configuration
+// (The RP2040 is a full-speed device, so this section is not compiled for the Pico.)
 
 // other speed configuration
 uint8_t desc_other_speed_config[CONFIG_TOTAL_LEN];
@@ -197,6 +233,8 @@ char const* string_desc_arr [] =
   "8675309",                      // 3: Serials, should use chip ID
 };
 
+// Buffer for the UTF-16 string descriptor returned to the host: a 2-byte
+// header followed by up to 31 characters.
 static uint16_t _desc_str[32];
 
 // Invoked when received GET STRING DESCRIPTOR request
@@ -241,20 +279,29 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid)
 // Invoked when received GET_REPORT control request
 // Application must fill buffer report's content and return its length.
 // Return zero will cause the stack to STALL request
+//
+// Answers the host's LampArray feature report reads:
+//  - LampArrayAttributesReport (ID 1): attributes of the whole array.
+//  - LampAttributesResponseReport (ID 3): attributes of lamp
+//    _lastLampIdRequested. The LampId then advances (wrapping to 0), so
+//    consecutive reads walk through every lamp.
 uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
 {
     (void) instance;
     uint16_t len = 0;
 
+    // Debug trace; only visible if UART stdio is enabled in CMakeLists.txt.
     printf("get report_id=%d, reqlen=%d\r\n",report_id, reqlen);
 
     switch(report_id)
     {
         case LAMP_ARRAY_ATTRIBUTES_REPORT_ID:
+          // Attributes of the whole array (built by GenerateLampArrayAttributes()).
           len = sizeof(_lampArrayAttributesReport);
           memcpy (buffer, &_lampArrayAttributesReport, len);
           break;
         case LAMP_ATTRIBUTES_RESPONSE_REPORT_ID:
+          // Attributes of the selected lamp, then advance to the next lamp.
           len = sizeof(LampAttributesResponseReport);
           memcpy (buffer, &_lampAttributesReports[_lastLampIdRequested], len);
           _lastLampIdRequested++;
@@ -271,6 +318,11 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_t
 
 // Invoked when received SET_REPORT control request or
 // received data on OUT endpoint ( Report ID = 0, Type = 0 )
+//
+// Handles the host's LampArray feature report writes. Reports whose size does
+// not match the expected structure are ignored. Color updates are written to
+// _cachedStateWriteTo and copied to _cachedStateReadFrom (which the main loop
+// renders) once a report carries LAMP_UPDATE_FLAG_UPDATE_COMPLETE.
 void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
 {
     (void) instance;
@@ -286,6 +338,7 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
     {
 
         case LAMP_RANGE_UPDATE_REPORT_ID:
+          // Set lamps LampIdStart..LampIdEnd (inclusive) to a single color.
           if(bufsize != sizeof(LampRangeUpdateReport))
           {
             return;
@@ -313,6 +366,8 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
           break;
 
         case LAMP_MULTI_UPDATE_REPORT_ID:
+          // Set up to LAMP_MULTI_UPDATE_LAMP_COUNT lamps, each to its own color;
+          // only the first LampCount entries of the report are used.
           if(bufsize != sizeof(LampMultiUpdateReport))
           {
             return;
@@ -337,6 +392,7 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
           break;
 
         case LAMP_ATTRIBUTES_REQUEST_REPORT_ID:
+          // Select the lamp described by the next LampAttributesResponse report.
           if(bufsize != sizeof(LampAttributesRequestReport))
           {
             return;
@@ -356,6 +412,9 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
           break;
 
         case LAMP_ARRAY_CONTROL_REPORT_ID:
+          // AutonomousMode = 1 hands control of the lamps back to the device.
+          // This firmware has no built-in lighting effect, so it simply turns
+          // all lamps off. Color updates are still applied in either mode.
           if(bufsize != sizeof(LampArrayControlReport))
           {
             return;
@@ -363,7 +422,7 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
 
           memcpy(&controlReport, buffer, sizeof(LampArrayControlReport));
 
-          bool prevUseDefaultEffect = _autonomousMode;
+          bool prevUseDefaultEffect = _autonomousMode; // currently unused
 
           _autonomousMode = !!controlReport.AutonomousMode;
 

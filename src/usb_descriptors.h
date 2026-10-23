@@ -25,9 +25,13 @@
 #ifndef USB_DESCRIPTORS_H_
 #define USB_DESCRIPTORS_H_
 
-#include "LampArrayHidDescriptor.h"
-#include "LampArrayReports.h"
-#include "LampArrayAttributes.h"
+// Pulls in the LampArray HID definitions shared by main.c and
+// usb_descriptors.c. These headers use the fixed-width integer types without
+// including <stdint.h>, so include this file after tusb.h. Keep the order
+// below: LampArrayAttributes.h uses types from LampArrayReports.h.
+#include "LampArrayHidDescriptor.h"   // HID report descriptor (_hidReportDescriptor)
+#include "LampArrayReports.h"         // report IDs and report structures
+#include "LampArrayAttributes.h"      // LampArrayState (and a legacy static layout)
 
 
 #endif /* USB_DESCRIPTORS_H_ */
